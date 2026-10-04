@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Greenkeeper — Smart Nursery Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  :root{
+    --pine-deep:#132A1C;
+    --pine-deep-2:#0E2015;
+    --pine:#1F3D2B;
+    --pine-light:#336B48;
+    --bg:#EEF2E6;
+    --surface:#FFFFFF;
+    --surface-alt:#E4EBD9;
+    --line:#DAE3CD;
+    --ink:#1B2420;
+    --ink-soft:#4B5A4F;
+    --soil:#7A5C43;
+    --amber:#E3A13E;
+    --amber-soft:#F4DDB3;
+    --rust:#C24A32;
+    --rust-soft:#F3D2C9;
+    --ok:#3E7C4B;
+    --ok-soft:#D6E8D2;
+    --radius:14px;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font-body);
+    background:var(--bg);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--amber-soft);}
+  a{color:inherit;}
+  button{font-family:inherit;}
+
+  /* ---------- Layout shell ---------- */
+  .app{
+    display:grid;
+    grid-template-columns:236px 1fr;
+    min-height:100vh;
+  }
+  @media (max-width: 880px){
+    .app{grid-template-columns:1fr;}
+    .sidebar{position:fixed; inset:0 auto 0 0; width:236px; transform:translateX(-100%); transition:transform .25s ease; z-index:50;}
+    .sidebar.open{transform:translateX(0);}
+    .menu-toggle{display:inline-flex !important;}
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background:linear-gradient(180deg, var(--pine-deep) 0%, var(--pine-deep-2) 100%);
+    color:#EAF1E5;
+    padding:26px 18px;
+    display:flex;
+    flex-direction:column;
+    gap:28px;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:0 6px;
+  }
+  .brand-mark{
+    width:34px;height:34px;flex:none;
+    border-radius:9px;
+    background:radial-gradient(circle at 30% 30%, var(--pine-light), var(--pine-deep-2));
+    display:flex;align-items:center;justify-content:center;
+  }
+  .brand-name{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:19px;
+    letter-spacing:.2px;
+    line-height:1.1;
+  }
+  .brand-sub{
+    font-size:11px;
+    color:#9FB39B;
+    font-family:var(--font-mono);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  nav.nav{display:flex; flex-direction:column; gap:2px;}
+  .nav-item{
+    display:flex; align-items:center; gap:11px;
+    padding:10px 12px;
+    border-radius:9px;
+    font-size:14px;
+    font-weight:500;
+    color:#C7D6C0;
+    cursor:pointer;
+    border:none;
+    background:transparent;
+    text-align:left;
+    width:100%;
+    transition:background .15s ease, color .15s ease;
+  }
+  .nav-item:hover{background:rgba(255,255,255,.06); color:#fff;}
+  .nav-item.active{background:var(--amber); color:#241705; font-weight:600;}
+  .nav-item svg{flex:none; opacity:.9;}
+  .nav-group-label{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#71876C;
+    padding:4px 12px 2px;
+    margin-top:8px;
+  }
+  .sidebar-foot{
+    margin-top:auto;
+    border-top:1px solid rgba(255,255,255,.08);
+    padding-top:14px;
+    display:flex; align-items:center; gap:10px;
+    font-size:13px;
+    color:#B7C7B1;
+  }
+  .avatar{
+    width:30px;height:30px;border-radius:50%;
+    background:var(--amber);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700; color:#241705; font-size:12px; font-family:var(--font-mono);
+    flex:none;
+  }
+
+  /* ---------- Main ---------- */
+  main.content{padding:22px 30px 60px; max-width:1240px;}
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:22px; gap:14px; flex-wrap:wrap;
+  }
+  .menu-toggle{
+    display:none; align-items:center; justify-content:center;
+    width:38px;height:38px;border-radius:9px;border:1px solid var(--line);
+    background:var(--surface); cursor:pointer;
+  }
+  .page-title{font-family:var(--font-display); font-size:26px; font-weight:600; margin:0;}
+  .page-sub{color:var(--ink-soft); font-size:13.5px; margin-top:3px;}
+  .topbar-right{display:flex; align-items:center; gap:12px;}
+  .clock{
+    font-family:var(--font-mono); font-size:12.5px; color:var(--ink-soft);
+    background:var(--surface); border:1px solid var(--line); border-radius:9px;
+    padding:8px 12px;
+  }
+  .btn{
+    border:none; border-radius:9px; padding:9px 16px; font-size:13.5px; font-weight:600;
+    cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn-primary{background:var(--pine); color:#fff;}
+  .btn-primary:hover{background:var(--pine-light);}
+  .btn-ghost{background:var(--surface); color:var(--ink); border:1px solid var(--line);}
+  .btn-ghost:hover{background:var(--surface-alt);}
+
+  .view{display:none;}
+  .view.active{display:block; animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  /* ---------- Cards / grid ---------- */
+  .grid{display:grid; gap:16px;}
+  .grid-4{grid-template-columns:repeat(4,1fr);}
+  .grid-2{grid-template-columns:1.4fr 1fr;}
+  @media (max-width:1040px){ .grid-4{grid-template-columns:repeat(2,1fr);} .grid-2{grid-template-columns:1fr;} }
+  @media (max-width:560px){ .grid-4{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px;
+  }
+  .card-title{
+    font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); margin:0 0 2px;
+  }
+
+  /* ---------- Growth-ring gauge cards ---------- */
+  .gauge-card{display:flex; flex-direction:column; gap:10px;}
+  .gauge-top{display:flex; align-items:center; justify-content:space-between;}
+  .gauge-body{display:flex; align-items:center; gap:14px;}
+  .gauge-value{font-family:var(--font-mono); font-size:26px; font-weight:600;}
+  .gauge-unit{font-size:13px; color:var(--ink-soft); font-weight:500;}
+  .gauge-status{
+    font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:99px;
+    text-transform:uppercase; letter-spacing:.04em;
+  }
+  .status-ok{background:var(--ok-soft); color:var(--ok);}
+  .status-warn{background:var(--amber-soft); color:#8A5C0E;}
+  .status-crit{background:var(--rust-soft); color:var(--rust);}
+  .gauge-caption{font-size:12px; color:var(--ink-soft); margin-top:2px;}
+
+  /* ---------- Zone cards ---------- */
+  .zone-card{
+    border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--surface);
+  }
+  .zone-head{padding:14px 16px 10px; display:flex; justify-content:space-between; align-items:flex-start;}
+  .zone-name{font-family:var(--font-display); font-weight:600; font-size:16.5px;}
+  .zone-crop{font-size:12px; color:var(--ink-soft);}
+  .dot{width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px;}
+  .dot-ok{background:var(--ok);} .dot-warn{background:var(--amber);} .dot-crit{background:var(--rust);}
+  .zone-metrics{display:flex; gap:14px; padding:0 16px 16px; font-family:var(--font-mono); font-size:12.5px; color:var(--ink-soft);}
+  .zone-metrics b{color:var(--ink); font-weight:600;}
+  .zone-bar-wrap{height:5px; background:var(--surface-alt); border-radius:99px; overflow:hidden; margin:0 16px 16px;}
+  .zone-bar{height:100%; border-radius:99px;}
+
+  /* ---------- Tables ---------- */
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  thead th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); padding:10px 12px; border-bottom:1px solid var(--line);
+    font-weight:700;
+  }
+  tbody td{padding:12px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface-alt);}
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
+    padding:4px 10px; border-radius:99px; text-transform:capitalize;
+  }
+  .pill-seed{background:#DDEAF1; color:#2A5B75;}
+  .pill-sapling{background:var(--ok-soft); color:var(--ok);}
+  .pill-mature{background:var(--amber-soft); color:#8A5C0E;}
+  .healthbar{width:70px; height:6px; border-radius:99px; background:var(--surface-alt); overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;}
+  .healthbar > div{height:100%;}
+  .table-toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; flex-wrap:wrap;}
+  .search{
+    border:1px solid var(--line); border-radius:9px; padding:9px 12px; font-size:13px; width:230px;
+    background:var(--surface);
+  }
+  .task-form{display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; gap:10px; align-items:end;}
+  .task-form label{display:block; font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px;}
+  .task-form input,.task-form select{width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 10px; font:inherit; font-size:13px; background:var(--surface);}
+  .task-form-actions{display:flex; gap:8px; align-items:center;}
+  .task-editing-note{font-size:12px; color:var(--ink-soft); margin:12px 0 0;}
+  .batch-form{display:grid; grid-template-columns:1.1fr 1.6fr .8fr .9fr .8fr .8fr auto; gap:10px; align-items:end;}
+  .batch-form label{display:block; font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px;}
+  .batch-form input,.batch-form select{width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 10px; font:inherit; font-size:13px; background:var(--surface);}
+  .batch-form input:disabled{background:var(--surface-alt); color:var(--ink-soft);}
+  @media (max-width:1100px){.batch-form{grid-template-columns:1fr 1fr 1fr;}.batch-form .task-form-actions{grid-column:span 3;}}
+  @media (max-width:560px){.batch-form{grid-template-columns:1fr;}.batch-form .task-form-actions{grid-column:span 1;}}
+  @media (max-width:900px){.task-form{grid-template-columns:1fr 1fr;}.task-form-actions{grid-column:span 2;}}
+
+  /* ---------- Irrigation ---------- */
+  .zone-toggle-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 4px; border-bottom:1px solid var(--line);
+  }
+  .zone-toggle-row:last-child{border-bottom:none;}
+  .switch{
+    width:42px; height:24px; border-radius:99px; background:var(--surface-alt); position:relative; cursor:pointer;
+    border:1px solid var(--line); flex:none; transition:background .15s ease;
+  }
+  .switch.on{background:var(--ok);}
+  .switch::after{
+    content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+    background:#fff; transition:left .15s ease; box-shadow:0 1px 2px rgba(0,0,0,.2);
+  }
+  .switch.on::after{left:20px;}
+
+  /* ---------- Alerts ---------- */
+  .alert-row{
+    display:flex; gap:12px; padding:14px; border-radius:11px; border:1px solid var(--line);
+    margin-bottom:10px; align-items:flex-start; background:var(--surface);
+  }
+  .alert-row.crit{border-color:#E9C1B4; background:#FCF3F0;}
+  .alert-row.warn{border-color:#EBD3A0; background:#FCF6E9;}
+  .alert-icon{width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;}
+  .alert-icon.crit{background:var(--rust-soft); color:var(--rust);}
+  .alert-icon.warn{background:var(--amber-soft); color:#8A5C0E;}
+  .alert-icon.ok{background:var(--ok-soft); color:var(--ok);}
+  .alert-title{font-weight:600; font-size:13.8px;}
+  .alert-meta{font-size:12px; color:var(--ink-soft); margin-top:2px; font-family:var(--font-mono);}
+  .alert-actions{margin-left:auto; display:flex; gap:8px; flex:none;}
+  .small-btn{
+    border:1px solid var(--line); background:var(--surface); border-radius:7px; padding:6px 10px;
+    font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .small-btn:hover{background:var(--surface-alt);}
+
+  /* ---------- misc ---------- */
+  .section-heading{display:flex; align-items:center; justify-content:space-between; margin:26px 0 12px;}
+  .section-heading h2{font-family:var(--font-display); font-size:18px; margin:0; font-weight:600;}
+  .chart-wrap{position:relative; height:230px;}
+  .kpi-row{display:flex; gap:22px; flex-wrap:wrap; margin-bottom:6px;}
+  .kpi{min-width:120px;}
+  .kpi-num{font-family:var(--font-mono); font-size:22px; font-weight:600;}
+  .kpi-label{font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em;}
+  .empty-state{
+    text-align:center; padding:50px 20px; color:var(--ink-soft);
+  }
+  .badge-count{
+    background:var(--rust); color:#fff; font-size:10.5px; font-weight:700; border-radius:99px;
+    padding:1px 7px; margin-left:auto;
+  }
+
+  /* ---------- Login screen ---------- */
+  #loginScreen{
+    position:fixed; inset:0; z-index:100;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(51,107,72,.35), transparent 45%),
+      radial-gradient(circle at 85% 80%, rgba(227,161,62,.18), transparent 45%),
+      linear-gradient(180deg, var(--pine-deep) 0%, var(--pine-deep-2) 100%);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+  }
+  .login-card{
+    width:100%; max-width:380px;
+    background:var(--surface);
+    border-radius:18px;
+    padding:34px 30px 28px;
+    box-shadow:0 30px 60px rgba(0,0,0,.35);
+  }
+  .login-brand{display:flex; align-items:center; gap:11px; margin-bottom:22px;}
+  .login-brand .brand-mark{background:radial-gradient(circle at 30% 30%, var(--pine-light), var(--pine-deep-2));}
+  .login-title{font-family:var(--font-display); font-size:16.5px; font-weight:600; color:var(--pine);}
+  .login-heading{font-family:var(--font-display); font-size:23px; font-weight:600; margin:0 0 4px;}
+  .login-sub{font-size:13px; color:var(--ink-soft); margin-bottom:22px;}
+  .field-label{font-size:12.5px; font-weight:600; margin-bottom:6px; display:block; color:var(--ink);}
+  .field-input{
+    width:100%; padding:11px 13px; border:1px solid var(--line); border-radius:9px;
+    font-size:13.5px; font-family:inherit; margin-bottom:16px; background:var(--surface);
+  }
+  .field-input:focus{outline:2px solid var(--pine-light); outline-offset:1px;}
+  .role-picker{display:flex; gap:8px; margin-bottom:20px;}
+  .role-opt{
+    flex:1; border:1.5px solid var(--line); border-radius:10px; padding:11px 8px; text-align:center;
+    cursor:pointer; font-size:12.5px; font-weight:600; color:var(--ink-soft); background:var(--surface);
+  }
+  .role-opt svg{display:block; margin:0 auto 5px;}
+  .role-opt.active{border-color:var(--pine); background:var(--ok-soft); color:var(--pine);}
+  .login-submit{
+    width:100%; padding:12px; border:none; border-radius:9px; background:var(--pine); color:#fff;
+    font-weight:700; font-size:14px; cursor:pointer; margin-top:2px;
+  }
+  .login-submit:hover{background:var(--pine-light);}
+  .login-hint{text-align:center; font-size:11.5px; color:var(--ink-soft); margin-top:16px; font-family:var(--font-mono);}
+
+  /* ---------- Role badge + logout ---------- */
+  .role-badge{
+    font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    padding:2px 8px; border-radius:99px; background:var(--amber-soft); color:#8A5C0E;
+  }
+  .logout-btn{
+    margin-left:auto; background:transparent; border:none; color:#9FB39B; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:7px;
+  }
+  .logout-btn:hover{background:rgba(255,255,255,.08); color:#fff;}
+
+  /* ---------- User (staff) dashboard ---------- */
+  .greeting-card{
+    background:linear-gradient(120deg, var(--pine) 0%, var(--pine-light) 100%);
+    color:#fff; border-radius:var(--radius); padding:24px 26px; margin-bottom:20px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;
+  }
+  .greeting-title{font-family:var(--font-display); font-size:22px; font-weight:600; margin:0 0 4px;}
+  .greeting-sub{font-size:13px; color:#D3E3CE;}
+  .greeting-stats{display:flex; gap:22px;}
+  .gstat-num{font-family:var(--font-mono); font-size:20px; font-weight:700;}
+  .gstat-label{font-size:11px; color:#C7DBC2; text-transform:uppercase; letter-spacing:.05em;}
+
+  .task-item{
+    display:flex; align-items:center; gap:12px; padding:13px 4px; border-bottom:1px solid var(--line);
+  }
+  .task-item:last-child{border-bottom:none;}
+  .task-check{
+    width:20px; height:20px; border-radius:6px; border:1.6px solid var(--line); flex:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; background:var(--surface);
+  }
+  .task-check.done{background:var(--ok); border-color:var(--ok);}
+  .task-text{flex:1; font-size:13.8px;}
+  .task-text.done{text-decoration:line-through; color:var(--ink-soft);}
+  .task-zone-tag{
+    font-size:11px; font-family:var(--font-mono); color:var(--ink-soft); background:var(--surface-alt);
+    padding:3px 8px; border-radius:6px;
+  }
+
+  .quicklog-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+  .quicklog-row select, .quicklog-row input{
+    border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:13px; font-family:inherit;
+  }
+  .activity-item{
+    display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px;
+  }
+  .activity-item:last-child{border-bottom:none;}
+  .activity-time{color:var(--ink-soft); font-family:var(--font-mono); font-size:11.5px; white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22V13M12 13C12 13 5 12 5 5C12 5 12 13 12 13ZM12 13C12 13 19 12 19 5C12 5 12 13 12 13Z" stroke="#EAF1E5" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="login-title">Greenkeeper</div>
+    </div>
+    <h1 class="login-heading">Welcome back</h1>
+    <div class="login-sub">Sign in to your nursery workspace</div>
+
+    <div class="role-picker" id="rolePicker">
+      <div class="role-opt active" data-role="admin">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="12" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
+        Manager / Admin
+      </div>
+      <div class="role-opt" data-role="staff">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.6"/><path d="M4.5 20C5.5 16 8.5 14.5 12 14.5C15.5 14.5 18.5 16 19.5 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Nursery Staff
+      </div>
+    </div>
+
+    <label class="field-label">Email</label>
+    <input class="field-input" id="loginEmail" type="email" value="riya.sharma@greenkeeper.app">
+    <label class="field-label">Password</label>
+    <input class="field-input" id="loginPass" type="password" value="••••••••">
+
+    <button class="login-submit" id="loginSubmit">Sign in</button>
+    <div class="login-hint">Prototype login — any details will work</div>
+  </div>
+</div>
+
+<div class="app" id="mainApp" style="display:none;">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22V13M12 13C12 13 5 12 5 5C12 5 12 13 12 13ZM12 13C12 13 19 12 19 5C12 5 12 13 12 13Z" stroke="#EAF1E5" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Greenkeeper</div>
+        <div class="brand-sub">Nursery OS</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="navList"></nav>
+
+    <div class="sidebar-foot">
+      <div class="avatar" id="footAvatar">RS</div>
+      <div>
+        <div style="color:#EAF1E5; font-weight:600;" id="footName">Riya Sharma</div>
+        <div style="font-size:11.5px;" id="footRole">Nursery Manager</div>
+      </div>
+      <button class="logout-btn" id="logoutBtn" title="Log out">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="content">
+
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="menu-toggle" id="menuToggle">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6H20M4 12H20M4 18H20" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+        <div>
+          <div style="display:flex; align-items:center; gap:9px;">
+            <h1 class="page-title" id="pageTitle">Nursery Overview</h1>
+            <span class="role-badge" id="topRoleBadge">Admin</span>
+          </div>
+          <div class="page-sub" id="pageSub">Live conditions across all growing zones</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="gauge-status status-ok" id="liveStatus" style="display:none;">● Live</span>
+        <div class="clock" id="clock">--:--:--</div>
+        <button class="btn btn-primary" id="addBatchTopBtn">+ New Batch</button>
+      </div>
+    </div>
+
+    <!-- ================= DASHBOARD ================= -->
+    <section class="view active" id="view-dashboard">
+      <div class="grid grid-4" id="gaugeGrid"></div>
+
+      <div class="section-heading"><h2>Zone Health</h2><span class="page-sub">4 zones · updated 12s ago</span></div>
+      <div class="grid grid-4" id="zoneGridSmall"></div>
+
+      <div class="section-heading"><h2>Recent Alerts</h2></div>
+      <div id="dashAlerts"></div>
+    </section>
+
+    <!-- ================= ZONES ================= -->
+    <section class="view" id="view-zones">
+      <div class="grid grid-2">
+        <div class="grid grid-2" id="zoneGridLarge" style="grid-template-columns:1fr 1fr;"></div>
+        <div class="card">
+          <p class="card-title">7-day soil moisture trend</p>
+          <div class="chart-wrap"><canvas id="zoneTrendChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= INVENTORY ================= -->
+    <section class="view" id="view-inventory">
+      <div class="card" style="margin-bottom:16px;">
+        <p class="card-title" id="batchFormTitle">Add a new batch</p>
+        <form class="batch-form" id="batchForm">
+          <div><label for="batchId">Batch ID</label><input id="batchId" required maxlength="40" placeholder="BT-1061"></div>
+          <div><label for="batchSpecies">Species</label><input id="batchSpecies" required maxlength="100" placeholder="e.g. Tomato Seedling"></div>
+          <div><label for="batchZone">Zone</label><select id="batchZone" required><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option></select></div>
+          <div><label for="batchStage">Stage</label><select id="batchStage" required><option value="seed">Seedling</option><option value="sapling">Sapling</option><option value="mature">Mature</option></select></div>
+          <div><label for="batchQty">Quantity</label><input id="batchQty" type="number" required min="1" step="1" placeholder="100"></div>
+          <div><label for="batchHealth">Health %</label><input id="batchHealth" type="number" required min="0" max="100" step="1" value="100"></div>
+          <div><label for="batchPlanted">Planted</label><input id="batchPlanted" type="date" required></div>
+          <div class="task-form-actions"><button class="btn btn-primary" id="batchSaveBtn" type="submit">Add batch</button><button class="btn btn-ghost" id="batchCancelBtn" type="button" hidden>Cancel</button></div>
+        </form>
+        <p class="task-editing-note" id="batchFormMessage">Add a record to make it available throughout the dashboard and reports.</p>
+      </div>
+      <div class="card">
+        <div class="table-toolbar">
+          <input class="search" id="batchSearch" placeholder="Search species or batch ID...">
+          <div style="display:flex; gap:8px;">
+            <select class="search" id="stageFilter" style="width:150px;">
+              <option value="">All stages</option>
+              <option value="seed">Seedling</option>
+              <option value="sapling">Sapling</option>
+              <option value="mature">Mature</option>
+            </select>
+            <button class="btn btn-ghost" id="exportBtn">Export CSV</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Batch ID</th><th>Species</th><th>Zone</th><th>Stage</th><th>Quantity</th><th>Health</th><th>Planted</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="batchTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= IRRIGATION ================= -->
+    <section class="view" id="view-irrigation">
+      <div class="grid grid-2">
+        <div class="card">
+          <p class="card-title">Zone controls</p>
+          <div id="irrigationList"></div>
+        </div>
+        <div class="card">
+          <p class="card-title">Water usage — this week</p>
+          <div class="chart-wrap"><canvas id="waterChart"></canvas></div>
+          <div class="kpi-row" style="margin-top:14px;">
+            <div class="kpi"><div class="kpi-num">1,240 L</div><div class="kpi-label">Used today</div></div>
+            <div class="kpi"><div class="kpi-num">18%</div><div class="kpi-label">Below last week</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-heading"><h2>Schedule</h2></div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Zone</th><th>Start</th><th>Duration</th><th>Frequency</th><th>Next run</th></tr></thead>
+          <tbody id="scheduleBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= ALERTS ================= -->
+    <section class="view" id="view-alerts">
+      <div id="alertsFull"></div>
+    </section>
+
+    <!-- ================= REPORTS ================= -->
+    <section class="view" id="view-reports">
+      <div class="grid grid-4" style="margin-bottom:18px;">
+        <div class="card"><div class="kpi-num" id="kpiTotalPlants">2,340</div><div class="kpi-label">Total plants</div></div>
+        <div class="card"><div class="kpi-num" id="kpiSurvivalRate">94.2%</div><div class="kpi-label">Survival rate</div></div>
+        <div class="card"><div class="kpi-num" id="kpiDispatch">312</div><div class="kpi-label">Ready to dispatch</div></div>
+        <div class="card"><div class="kpi-num" id="kpiInventoryValue">₹86,400</div><div class="kpi-label">Est. inventory value</div></div>
+      </div>
+      <div class="card">
+        <p class="card-title">Growth &amp; survival trend — last 6 months</p>
+        <div class="chart-wrap"><canvas id="reportsChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ================= TASK ASSIGNMENTS (ADMIN) ================= -->
+    <section class="view" id="view-taskassignments">
+      <div class="card" style="margin-bottom:16px;">
+        <p class="card-title" id="taskFormTitle">Assign a task</p>
+        <form class="task-form" id="taskForm">
+          <div><label for="taskTitle">Task</label><input id="taskTitle" required maxlength="160" placeholder="e.g. Inspect Zone B irrigation line"></div>
+          <div><label for="taskAssignee">Assign to</label><input id="taskAssignee" required maxlength="80" value="Aman Verma"></div>
+          <div><label for="taskZone">Zone</label><select id="taskZone" required><option value="A">Zone A</option><option value="B">Zone B</option><option value="C">Zone C</option><option value="D">Zone D</option></select></div>
+          <div><label for="taskDueDate">Due date</label><input id="taskDueDate" type="date" required></div>
+          <div class="task-form-actions"><button class="btn btn-primary" id="taskSaveBtn" type="submit">Assign task</button><button class="btn btn-ghost" id="taskCancelBtn" type="button" hidden>Cancel</button></div>
+        </form>
+        <p class="task-editing-note" id="taskFormMessage">Tasks assigned to a staff member appear in that person's My Tasks list.</p>
+      </div>
+      <div class="card">
+        <div class="table-toolbar"><p class="card-title" style="margin:0;">Assigned tasks</p><span class="page-sub" id="adminTaskCount"></span></div>
+        <table>
+          <thead><tr><th>Task</th><th>Staff member</th><th>Zone</th><th>Due</th><th>Status</th><th></th></tr></thead>
+          <tbody id="adminTaskTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= USER (STAFF) DASHBOARD ================= -->
+    <section class="view" id="view-userdash">
+      <div class="greeting-card">
+        <div>
+          <div class="greeting-title" id="staffGreeting">Good morning, Aman 👋</div>
+          <div class="greeting-sub">You're assigned to Zone A and Zone D today</div>
+        </div>
+        <div class="greeting-stats">
+          <div><div class="gstat-num" id="staffTasksLeft">3</div><div class="gstat-label">Tasks left</div></div>
+          <div><div class="gstat-num">2</div><div class="gstat-label">Zones assigned</div></div>
+          <div><div class="gstat-num">1</div><div class="gstat-label">Open alert</div></div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <p class="card-title">Today's checklist</p>
+          <div id="staffTaskList"></div>
+        </div>
+        <div class="card">
+          <p class="card-title">Your zones</p>
+          <div id="staffZoneCards"></div>
+        </div>
+      </div>
+
+      <div class="section-heading"><h2>Log an activity</h2></div>
+      <div class="card">
+        <div class="quicklog-row">
+          <select id="logZone">
+            <option>Zone A — Seedling House</option>
+            <option>Zone D — Herb Bench</option>
+          </select>
+          <select id="logAction">
+            <option>Watered</option>
+            <option>Inspected</option>
+            <option>Fertilized</option>
+            <option>Pruned</option>
+            <option>Reported issue</option>
+          </select>
+          <input id="logNote" type="text" placeholder="Add a short note (optional)" style="flex:1; min-width:180px;">
+          <button class="btn btn-primary" id="logSubmitBtn">Log activity</button>
+        </div>
+        <p class="card-title" style="margin-top:6px;">Recent activity</p>
+        <div id="activityList"></div>
+      </div>
+    </section>
+
+    <!-- ================= MY TASKS (STAFF) ================= -->
+    <section class="view" id="view-tasks">
+      <div class="card">
+        <p class="card-title">All assigned tasks</p>
+        <div id="staffTaskListFull"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// Same-origin API — this file is served BY the backend (server.js),
+// so relative /api paths always reach it, on localhost or elsewhere.
+const API_BASE = '/api';
+
+/* ============================================================
+   DATA
+============================================================ */
+let zones = [
+  {id:'A', name:'Zone A — Seedling House', crop:'Tomato & Chilli', temp:26, humidity:64, soil:58, light:72, status:'ok'},
+  {id:'B', name:'Zone B — Sapling Yard', crop:'Mango & Guava', temp:29, humidity:48, soil:31, light:81, status:'warn'},
+  {id:'C', name:'Zone C — Flowering Bay', crop:'Marigold & Rose', temp:34, humidity:41, soil:22, light:88, status:'crit'},
+  {id:'D', name:'Zone D — Herb Bench', crop:'Basil & Mint', temp:25, humidity:70, soil:66, light:55, status:'ok'},
+];
+
+let batches = [
+  {id:'BT-1042', species:'Tomato Seedling', zone:'A', stage:'seed', qty:420, health:92, planted:'2026-07-28'},
+  {id:'BT-1038', species:'Rose Cutting', zone:'C', stage:'mature', qty:96, health:74, planted:'2026-05-12'},
+  {id:'BT-1051', species:'Basil', zone:'D', stage:'seed', qty:310, health:88, planted:'2026-08-02'},
+  {id:'BT-1029', species:'Mango Sapling', zone:'B', stage:'sapling', qty:64, health:65, planted:'2026-03-20'},
+  {id:'BT-1046', species:'Marigold', zone:'C', stage:'mature', qty:220, health:80, planted:'2026-06-15'},
+  {id:'BT-1033', species:'Aloe Vera', zone:'D', stage:'sapling', qty:150, health:95, planted:'2026-04-30'},
+  {id:'BT-1055', species:'Guava Sapling', zone:'B', stage:'sapling', qty:58, health:59, planted:'2026-02-18'},
+  {id:'BT-1060', species:'Chilli Seedling', zone:'A', stage:'seed', qty:280, health:90, planted:'2026-08-05'},
+];
+
+let alertsData = [
+  {level:'crit', title:'Zone C soil moisture critically low (22%)', meta:'Zone C · Flowering Bay · 6 min ago'},
+  {level:'crit', title:'Zone C temperature above safe range (34°C)', meta:'Zone C · Flowering Bay · 6 min ago'},
+  {level:'warn', title:'Zone B humidity trending down (48%)', meta:'Zone B · Sapling Yard · 24 min ago'},
+  {level:'ok', title:'Irrigation cycle completed for Zone D', meta:'Zone D · Herb Bench · 1 hr ago'},
+];
+
+/* ============================================================
+   HELPERS
+============================================================ */
+function statusClass(s){ return s==='ok' ? 'status-ok' : s==='warn' ? 'status-warn' : 'status-crit'; }
+function dotClass(s){ return s==='ok' ? 'dot-ok' : s==='warn' ? 'dot-warn' : 'dot-crit'; }
+function ringColor(s){ return s==='ok' ? '#3E7C4B' : s==='warn' ? '#E3A13E' : '#C24A32'; }
+function healthColor(h){ return h>=80 ? '#3E7C4B' : h>=60 ? '#E3A13E' : '#C24A32'; }
+
+function gaugeSVG(value, max, color, size=64){
+  const r = (size/2) - 6;
+  const c = 2*Math.PI*r;
+  const pct = Math.min(value/max, 1);
+  const dash = c*pct;
+  return `
+  <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#E4EBD9" stroke-width="6"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r-9}" fill="none" stroke="#EEF2E6" stroke-width="2"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="6"
+      stroke-linecap="round" stroke-dasharray="${dash} ${c}"
+      transform="rotate(-90 ${size/2} ${size/2})"/>
+  </svg>`;
+}
+
+/* ============================================================
+   DASHBOARD — gauge cards
+============================================================ */
+const avgOf = (key) => Math.round(zones.reduce((a,z)=>a+z[key],0)/zones.length);
+
+function classify(value, warnAt, critAt, invert){
+  if(invert){ // lower is worse (e.g. soil moisture)
+    if(value < critAt) return 'crit';
+    if(value < warnAt) return 'warn';
+    return 'ok';
+  }
+  if(value > critAt) return 'crit';
+  if(value > warnAt) return 'warn';
+  return 'ok';
+}
+
+function buildMetrics(){
+  const critZones = zones.filter(z=>z.status==='crit').length;
+  return [
+    {label:'Avg. Temperature', value:avgOf('temp'), unit:'°C', max:45,
+      status: classify(avgOf('temp'), 30, 33), caption:'Ideal range 20–30°C'},
+    {label:'Avg. Humidity', value:avgOf('humidity'), unit:'%', max:100,
+      status: avgOf('humidity') < 40 ? 'warn' : 'ok', caption:'Ideal range 50–75%'},
+    {label:'Avg. Soil Moisture', value:avgOf('soil'), unit:'%', max:100,
+      status: classify(avgOf('soil'), 35, 25, true),
+      caption: critZones ? `Below threshold in ${critZones} zone${critZones>1?'s':''}` : 'All zones within range'},
+    {label:'Avg. Light Level', value:avgOf('light'), unit:'%', max:100,
+      status:'ok', caption:'Within target for bloom stage'},
+  ];
+}
+
+function renderGauges(){
+  const metrics = buildMetrics();
+  document.getElementById('gaugeGrid').innerHTML = metrics.map(m => `
+    <div class="card gauge-card">
+      <div class="gauge-top">
+        <p class="card-title">${m.label}</p>
+        <span class="gauge-status ${statusClass(m.status)}">${m.status==='ok'?'Normal':m.status==='warn'?'Watch':'Critical'}</span>
+      </div>
+      <div class="gauge-body">
+        ${gaugeSVG(m.value, m.max, ringColor(m.status))}
+        <div>
+          <span class="gauge-value">${m.value}</span><span class="gauge-unit"> ${m.unit}</span>
+        </div>
+      </div>
+      <div class="gauge-caption">${m.caption}</div>
+    </div>
+  `).join('');
+}
+renderGauges();
+
+/* ============================================================
+   ZONE CARDS (small — dashboard, large — zones page)
+============================================================ */
+function zoneCardHTML(z, big){
+  return `
+  <div class="zone-card">
+    <div class="zone-head">
+      <div>
+        <div class="zone-name"><span class="dot ${dotClass(z.status)}"></span>${z.name}</div>
+        <div class="zone-crop">${z.crop}</div>
+      </div>
+    </div>
+    <div class="zone-metrics">
+      <span>🌡 <b>${z.temp}°C</b></span>
+      <span>💧 <b>${z.humidity}%</b></span>
+      <span>🌱 <b>${z.soil}%</b></span>
+      ${big ? `<span>☀ <b>${z.light}%</b></span>` : ''}
+    </div>
+    <div class="zone-bar-wrap"><div class="zone-bar" style="width:${z.soil}%; background:${ringColor(z.status)}"></div></div>
+  </div>`;
+}
+function renderZoneCards(){
+  document.getElementById('zoneGridSmall').innerHTML = zones.map(z=>zoneCardHTML(z,false)).join('');
+  document.getElementById('zoneGridLarge').innerHTML = zones.map(z=>zoneCardHTML(z,true)).join('');
+}
+renderZoneCards();
+
+/* ============================================================
+   ALERTS
+============================================================ */
+function timeAgo(ts){
+  if(!ts) return '';
+  const mins = Math.round((Date.now()-ts)/60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins/60);
+  return `${hrs} hr ago`;
+}
+function alertRowHTML(a){
+  const icon = a.level==='crit' ? '⚠' : a.level==='warn' ? '⏱' : '✓';
+  const meta = a.meta || `Zone ${a.zone} · ${timeAgo(a.ts)}`;
+  return `
+  <div class="alert-row ${a.level}">
+    <div class="alert-icon ${a.level}">${icon}</div>
+    <div>
+      <div class="alert-title">${a.title}</div>
+      <div class="alert-meta">${meta}</div>
+    </div>
+    <div class="alert-actions">
+      <button class="small-btn" onclick="acknowledgeAlert(${a.id ?? 'null'})">${a.acknowledged ? 'Acknowledged' : 'Acknowledge'}</button>
+    </div>
+  </div>`;
+}
+function renderAlerts(){
+  const active = alertsData.filter(a=>!a.acknowledged);
+  document.getElementById('dashAlerts').innerHTML = active.slice(0,3).map(alertRowHTML).join('') || '<p class="page-sub">No active alerts.</p>';
+  document.getElementById('alertsFull').innerHTML = alertsData.map(alertRowHTML).join('');
+}
+renderAlerts();
+
+async function acknowledgeAlert(id){
+  if(id == null) return;
+  const a = alertsData.find(x=>x.id===id);
+  if(a) a.acknowledged = true;
+  renderAlerts();
+  try{ await fetch(`${API_BASE}/alerts/${id}/ack`, {method:'POST'}); }catch(e){ /* offline demo mode */ }
+}
+
+/* ============================================================
+   INVENTORY TABLE
+============================================================ */
+function stagePill(stage){
+  const label = stage==='seed'?'Seedling':stage==='sapling'?'Sapling':'Mature';
+  const cls = stage==='seed'?'pill-seed':stage==='sapling'?'pill-sapling':'pill-mature';
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+let editingBatchId = null;
+
+function setBatchFormMode(batch = null){
+  editingBatchId = batch?.id ?? null;
+  document.getElementById('batchFormTitle').textContent = batch ? 'Edit batch record' : 'Add a new batch';
+  document.getElementById('batchSaveBtn').textContent = batch ? 'Save changes' : 'Add batch';
+  document.getElementById('batchCancelBtn').hidden = !batch;
+  document.getElementById('batchFormMessage').textContent = batch ? 'Update the batch details, then save your changes.' : 'Add a record to make it available throughout the dashboard and reports.';
+  document.getElementById('batchId').value = batch?.id || '';
+  document.getElementById('batchId').disabled = Boolean(batch);
+  document.getElementById('batchSpecies').value = batch?.species || '';
+  document.getElementById('batchZone').value = batch?.zone || 'A';
+  document.getElementById('batchStage').value = batch?.stage || 'seed';
+  document.getElementById('batchQty').value = batch?.qty || '';
+  document.getElementById('batchHealth').value = batch?.health ?? 100;
+  document.getElementById('batchPlanted').value = batch?.planted || new Date().toISOString().slice(0, 10);
+}
+
+function beginBatchEdit(id){
+  const batch = batches.find(item => item.id === id);
+  if(!batch) return;
+  setBatchFormMode(batch);
+  document.getElementById('batchSpecies').focus();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+document.getElementById('batchForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const payload = {
+    id: document.getElementById('batchId').value.trim(),
+    species: document.getElementById('batchSpecies').value.trim(),
+    zone: document.getElementById('batchZone').value,
+    stage: document.getElementById('batchStage').value,
+    qty: Number(document.getElementById('batchQty').value),
+    health: Number(document.getElementById('batchHealth').value),
+    planted: document.getElementById('batchPlanted').value,
+  };
+  if(!payload.id || !payload.species || !payload.zone || !Number.isFinite(payload.qty) || payload.qty < 1 || !Number.isFinite(payload.health) || payload.health < 0 || payload.health > 100) return;
+  const saveButton = document.getElementById('batchSaveBtn');
+  saveButton.disabled = true;
+  try{
+    const endpoint = editingBatchId ? `${API_BASE}/batches/${encodeURIComponent(editingBatchId)}` : `${API_BASE}/batches`;
+    const body = editingBatchId ? {...payload, id:undefined} : payload;
+    const response = await fetch(endpoint, {method:editingBatchId ? 'PATCH' : 'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if(!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Batch could not be saved');
+    }
+    const savedBatch = await response.json();
+    if(editingBatchId) batches = batches.map(batch => batch.id === savedBatch.id ? savedBatch : batch);
+    else batches.push(savedBatch);
+    setBatchFormMode();
+    filterBatches();
+    renderReportsSummary();
+  }catch(error){
+    document.getElementById('batchFormMessage').textContent = error.message || 'Could not save the batch. Please try again.';
+  }finally{ saveButton.disabled = false; }
+});
+document.getElementById('batchCancelBtn').addEventListener('click', () => setBatchFormMode());
+setBatchFormMode();
+
+function renderBatches(list){
+  document.getElementById('batchTableBody').innerHTML = list.map(b=>`
+    <tr>
+      <td style="font-family:var(--font-mono); font-size:12.5px;">${escapeHTML(b.id)}</td>
+      <td><b>${escapeHTML(b.species)}</b></td>
+      <td>Zone ${b.zone}</td>
+      <td>${stagePill(b.stage)}</td>
+      <td>${b.qty}</td>
+      <td>
+        <span class="healthbar"><div style="width:${b.health}%; background:${healthColor(b.health)}"></div></span>
+        ${b.health}%
+      </td>
+      <td style="color:var(--ink-soft); font-size:12.5px;">${b.planted}</td>
+      <td><button class="small-btn" data-edit-batch="${escapeHTML(b.id)}">Edit</button></td>
+    </tr>
+  `).join('');
+  document.querySelectorAll('[data-edit-batch]').forEach(button => button.addEventListener('click', () => beginBatchEdit(button.dataset.editBatch)));
+}
+renderBatches(batches);
+
+document.getElementById('batchSearch').addEventListener('input', filterBatches);
+document.getElementById('stageFilter').addEventListener('change', filterBatches);
+function filterBatches(){
+  const q = document.getElementById('batchSearch').value.toLowerCase();
+  const stage = document.getElementById('stageFilter').value;
+  const filtered = batches.filter(b =>
+    (b.species.toLowerCase().includes(q) || b.id.toLowerCase().includes(q)) &&
+    (stage === '' || b.stage === stage)
+  );
+  renderBatches(filtered);
+}
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const rows = [['Batch ID','Species','Zone','Stage','Quantity','Health','Planted'],
+    ...batches.map(b=>[b.id,b.species,'Zone '+b.zone,b.stage,b.qty,b.health+'%',b.planted])];
+  const csv = rows.map(r=>r.join(',')).join('\\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'plant-batches.csv';
+  a.click();
+});
+
+/* ============================================================
+   IRRIGATION
+============================================================ */
+function renderIrrigation(){
+  document.getElementById('irrigationList').innerHTML = zones.map(z=>`
+    <div class="zone-toggle-row">
+      <div>
+        <div style="font-weight:600; font-size:13.8px;">${z.name}</div>
+        <div style="font-size:12px; color:var(--ink-soft);">Soil moisture: ${z.soil}%</div>
+      </div>
+      <div class="switch ${z.pumpOn?'on':''}" data-zone="${z.id}"></div>
+    </div>
+  `).join('');
+  document.querySelectorAll('.switch').forEach(sw=>{
+    sw.addEventListener('click', ()=>togglePump(sw.dataset.zone));
+  });
+}
+renderIrrigation();
+
+async function togglePump(zoneId){
+  const zone = zones.find(z=>z.id===zoneId);
+  if(!zone) return;
+  zone.pumpOn = !zone.pumpOn; // optimistic UI update
+  renderIrrigation();
+  try{
+    const res = await fetch(`${API_BASE}/irrigation/${zoneId}/toggle`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({on: zone.pumpOn})
+    });
+    const data = await res.json();
+    zone.pumpOn = data.pumpOn;
+  }catch(e){ /* offline demo mode — optimistic value stands */ }
+  renderIrrigation();
+}
+
+function renderSchedule(schedule){
+  document.getElementById('scheduleBody').innerHTML = schedule.map(s=>{
+    const zone = zones.find(z=>z.id===s.zone);
+    return `
+    <tr>
+      <td><b>${zone ? zone.name : 'Zone '+s.zone}</b></td>
+      <td>${s.start}</td>
+      <td>${s.duration}</td>
+      <td>${s.frequency}</td>
+      <td style="color:var(--ink-soft);">Today, 6:30 PM</td>
+    </tr>`;
+  }).join('');
+}
+renderSchedule(zones.map(z=>({zone:z.id, start:'06:30 AM', duration:'12 min', frequency:'Twice daily'})));
+
+/* ============================================================
+   LOGIN + ROLE STATE
+============================================================ */
+let currentRole = 'admin';
+document.querySelectorAll('.role-opt').forEach(opt=>{
+  opt.addEventListener('click', ()=>{
+    document.querySelectorAll('.role-opt').forEach(o=>o.classList.remove('active'));
+    opt.classList.add('active');
+    currentRole = opt.dataset.role;
+    const email = document.getElementById('loginEmail');
+    email.value = currentRole === 'admin' ? 'riya.sharma@greenkeeper.app' : 'aman.verma@greenkeeper.app';
+  });
+});
+document.getElementById('loginSubmit').addEventListener('click', ()=>{
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'grid';
+  enterApp(currentRole);
+});
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+});
+
+/* ============================================================
+   NAV CONFIG PER ROLE
+============================================================ */
+const navConfig = {
+  admin: [
+    {group:'Monitor', items:[
+      {view:'dashboard', label:'Overview', icon:'<rect x="3" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="12" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/>'},
+      {view:'zones', label:'Zones', icon:'<path d="M3 12L12 3L21 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5 10V20H19V10" stroke="currentColor" stroke-width="1.6"/>'},
+    ]},
+    {group:'Manage', items:[
+      {view:'inventory', label:'Plant Batches', icon:'<path d="M4 7L12 3L20 7V17L12 21L4 17V7Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 7L12 11L20 7" stroke="currentColor" stroke-width="1.6"/><path d="M12 11V21" stroke="currentColor" stroke-width="1.6"/>'},
+      {view:'taskassignments', label:'Task Assignments', icon:'<path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+      {view:'irrigation', label:'Irrigation', icon:'<path d="M12 2C12 2 5 11 5 15.5C5 19.09 8.13 22 12 22C15.87 22 19 19.09 19 15.5C19 11 12 2 12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'},
+      {view:'alerts', label:'Alerts', icon:'<path d="M12 3L21 20H3L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9.5V13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="16.5" r="0.9" fill="currentColor"/>', badge:'alertBadge'},
+    ]},
+    {group:'Insights', items:[
+      {view:'reports', label:'Reports', icon:'<path d="M4 20V10M12 20V4M20 20V14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+    ]},
+  ],
+  staff: [
+    {group:'My Work', items:[
+      {view:'userdash', label:'My Dashboard', icon:'<rect x="3" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="3" width="8" height="5" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="12" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/>'},
+      {view:'tasks', label:'My Tasks', icon:'<path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+    ]},
+    {group:'Zones', items:[
+      {view:'zones', label:'My Zones', icon:'<path d="M3 12L12 3L21 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5 10V20H19V10" stroke="currentColor" stroke-width="1.6"/>'},
+    ]},
+    {group:'Updates', items:[
+      {view:'alerts', label:'Alerts', icon:'<path d="M12 3L21 20H3L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9.5V13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="16.5" r="0.9" fill="currentColor"/>', badge:'alertBadge'},
+    ]},
+  ]
+};
+
+const titles = {
+  dashboard:['Nursery Overview','Live conditions across all growing zones'],
+  zones:['Zones','Detailed climate readings per growing zone'],
+  inventory:['Plant Batches','Track species, stage, and health across the nursery'],
+  irrigation:['Irrigation','Control watering per zone and review usage'],
+  alerts:['Alerts','Every threshold breach and system event'],
+  reports:['Reports','Growth, survival, and inventory value over time'],
+  taskassignments:['Task Assignments','Create and update work for your nursery staff'],
+  userdash:['My Dashboard','Your tasks and assigned zones for today'],
+  tasks:['My Tasks','Everything on your plate this week'],
+};
+
+function renderNav(role){
+  const html = navConfig[role].map(group => `
+    <div class="nav-group-label">${group.group}</div>
+    ${group.items.map(it => `
+      <button class="nav-item" data-view="${it.view}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">${it.icon}</svg>
+        ${it.label}
+        ${it.badge ? `<span class="badge-count" id="${it.badge}">3</span>` : ''}
+      </button>
+    `).join('')}
+  `).join('');
+  document.getElementById('navList').innerHTML = html;
+  attachNavHandlers();
+}
+
+function attachNavHandlers(){
+  document.querySelectorAll('.nav-item').forEach(item=>{
+    item.addEventListener('click', ()=> goToView(item.dataset.view));
+  });
+}
+
+function goToView(target){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view === target));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id === 'view-'+target));
+  document.getElementById('pageTitle').textContent = titles[target][0];
+  document.getElementById('pageSub').textContent = titles[target][1];
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+function enterApp(role){
+  renderNav(role);
+  const defaultView = role === 'admin' ? 'dashboard' : 'userdash';
+  goToView(defaultView);
+
+  if(role === 'admin'){
+    document.getElementById('footAvatar').textContent = 'RS';
+    document.getElementById('footName').textContent = 'Riya Sharma';
+    document.getElementById('footRole').textContent = 'Nursery Manager';
+    document.getElementById('topRoleBadge').textContent = 'Admin';
+    document.getElementById('addBatchTopBtn').style.display = 'inline-flex';
+    renderAdminTasks();
+  } else {
+    document.getElementById('footAvatar').textContent = 'AV';
+    document.getElementById('footName').textContent = 'Aman Verma';
+    document.getElementById('footRole').textContent = 'Nursery Staff';
+    document.getElementById('topRoleBadge').textContent = 'Staff';
+    document.getElementById('addBatchTopBtn').style.display = 'none';
+    renderStaffDashboard();
+  }
+}
+
+document.getElementById('menuToggle').addEventListener('click', ()=>{
+  document.getElementById('sidebar').classList.toggle('open');
+});
+document.getElementById('addBatchTopBtn').addEventListener('click', ()=>{
+  goToView('inventory');
+  document.querySelector('[data-view="inventory"]')?.classList.add('active');
+  setBatchFormMode();
+  document.getElementById('batchId').focus();
+});
+
+/* ============================================================
+   STAFF DASHBOARD
+============================================================ */
+let staffTasks = [
+  {id:1, title:'Water Zone A seedling trays', zone:'A', assignee:'Aman Verma', dueDate:'2026-10-04', completed:false},
+  {id:2, title:'Check soil pH in Zone D herb bench', zone:'D', assignee:'Aman Verma', dueDate:'2026-10-04', completed:false},
+  {id:3, title:'Move mature marigold trays to dispatch shelf', zone:'C', assignee:'Aman Verma', dueDate:'2026-10-05', completed:true},
+  {id:4, title:'Refill nutrient tank for drip line 2', zone:'A', assignee:'Aman Verma', dueDate:'2026-10-05', completed:false},
+];
+const staffMemberName = 'Aman Verma';
+let editingTaskId = null;
+const activityLog = [
+  {time:'8:12 AM', text:'Watered Zone D — Herb Bench'},
+  {time:'Yesterday', text:'Inspected Zone A — Seedling House, all healthy'},
+];
+
+function renderStaffTasks(){
+  const assignedTasks = staffTasks.filter(task => task.assignee === staffMemberName);
+  const rowsShort = assignedTasks.map(t => taskRowHTML(t)).join('') || '<p class="page-sub">No tasks assigned yet.</p>';
+  document.getElementById('staffTaskList').innerHTML = rowsShort;
+  document.getElementById('staffTaskListFull').innerHTML = rowsShort;
+  const left = assignedTasks.filter(t=>!t.completed).length;
+  document.getElementById('staffTasksLeft').textContent = left;
+  document.querySelectorAll('.task-check').forEach(chk=>{
+    chk.addEventListener('click', async ()=>{
+      const id = Number(chk.dataset.id);
+      const t = staffTasks.find(x=>x.id===id);
+      if(!t) return;
+      t.completed = !t.completed;
+      renderStaffTasks();
+      renderAdminTasks();
+      try{
+        const response = await fetch(`${API_BASE}/tasks/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({completed:t.completed})});
+        if(!response.ok) throw new Error('Task could not be updated');
+      }catch(error){
+        t.completed = !t.completed;
+        renderStaffTasks();
+        renderAdminTasks();
+      }
+    });
+  });
+}
+function taskRowHTML(t){
+  // Keep the existing visual state token in sync with the persisted field.
+  t.done = t.completed;
+  return `
+    <div class="task-item">
+      <div class="task-check ${t.done?'done':''}" data-id="${t.id}">${t.done ? '✓' : ''}</div>
+      <div class="task-text ${t.completed?'done':''}">${escapeHTML(t.title)}</div>
+      <span class="task-zone-tag">Zone ${escapeHTML(t.zone)}${t.dueDate ? ` · ${escapeHTML(t.dueDate)}` : ''}</span>
+    </div>`;
+}
+
+function escapeHTML(value){
+  const div = document.createElement('div');
+  div.textContent = value ?? '';
+  return div.innerHTML;
+}
+
+function renderAdminTasks(){
+  const body = document.getElementById('adminTaskTableBody');
+  if(!body) return;
+  document.getElementById('adminTaskCount').textContent = `${staffTasks.length} task${staffTasks.length === 1 ? '' : 's'}`;
+  body.innerHTML = staffTasks.map(task => `
+    <tr>
+      <td><b>${escapeHTML(task.title)}</b></td>
+      <td>${escapeHTML(task.assignee)}</td>
+      <td>Zone ${escapeHTML(task.zone)}</td>
+      <td style="color:var(--ink-soft);">${escapeHTML(task.dueDate || '—')}</td>
+      <td><span class="pill ${task.completed ? 'pill-sapling' : 'pill-seed'}">${task.completed ? 'Completed' : 'Open'}</span></td>
+      <td><button class="small-btn" data-edit-task="${task.id}">Edit</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty-state">No tasks assigned yet.</td></tr>';
+  document.querySelectorAll('[data-edit-task]').forEach(button => button.addEventListener('click', () => beginTaskEdit(Number(button.dataset.editTask))));
+}
+
+function setTaskFormMode(task = null){
+  editingTaskId = task?.id ?? null;
+  document.getElementById('taskFormTitle').textContent = task ? 'Edit task assignment' : 'Assign a task';
+  document.getElementById('taskSaveBtn').textContent = task ? 'Save changes' : 'Assign task';
+  document.getElementById('taskCancelBtn').hidden = !task;
+  document.getElementById('taskFormMessage').textContent = task ? 'Update the assignment details, then save your changes.' : "Tasks assigned to a staff member appear in that person's My Tasks list.";
+  document.getElementById('taskTitle').value = task?.title || '';
+  document.getElementById('taskAssignee').value = task?.assignee || staffMemberName;
+  document.getElementById('taskZone').value = task?.zone || 'A';
+  document.getElementById('taskDueDate').value = task?.dueDate || new Date().toISOString().slice(0, 10);
+}
+
+function beginTaskEdit(id){
+  const task = staffTasks.find(item => item.id === id);
+  if(!task) return;
+  setTaskFormMode(task);
+  document.getElementById('taskTitle').focus();
+}
+
+document.getElementById('taskForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const payload = {title:document.getElementById('taskTitle').value.trim(), assignee:document.getElementById('taskAssignee').value.trim(), zone:document.getElementById('taskZone').value, dueDate:document.getElementById('taskDueDate').value};
+  if(!payload.title || !payload.assignee || !payload.zone) return;
+  const saveButton = document.getElementById('taskSaveBtn');
+  saveButton.disabled = true;
+  try{
+    const endpoint = editingTaskId ? `${API_BASE}/tasks/${editingTaskId}` : `${API_BASE}/tasks`;
+    const response = await fetch(endpoint, {method:editingTaskId ? 'PATCH' : 'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    if(!response.ok) throw new Error('Task could not be saved');
+    const savedTask = await response.json();
+    if(editingTaskId) staffTasks = staffTasks.map(task => task.id === savedTask.id ? savedTask : task);
+    else staffTasks.push(savedTask);
+    setTaskFormMode();
+    renderAdminTasks();
+    renderStaffTasks();
+  }catch(error){
+    document.getElementById('taskFormMessage').textContent = 'Could not save the task. Please check that the server is running and try again.';
+  }finally{ saveButton.disabled = false; }
+});
+document.getElementById('taskCancelBtn').addEventListener('click', () => setTaskFormMode());
+setTaskFormMode();
+
+function renderStaffZones(){
+  const assigned = zones.filter(z => z.name.includes('Zone A') || z.name.includes('Zone D'));
+  document.getElementById('staffZoneCards').innerHTML = assigned.map(z=>zoneCardHTML(z,true)).join('');
+}
+
+function renderActivity(){
+  document.getElementById('activityList').innerHTML = activityLog.map(a=>`
+    <div class="activity-item">
+      <span class="activity-time">${a.time}</span>
+      <span>${a.text}</span>
+    </div>
+  `).join('');
+}
+
+document.getElementById('logSubmitBtn').addEventListener('click', ()=>{
+  const zone = document.getElementById('logZone').value.split('—')[0].trim();
+  const action = document.getElementById('logAction').value;
+  const note = document.getElementById('logNote').value.trim();
+  activityLog.unshift({time:'Just now', text:`${action} ${zone}${note ? ' — ' + note : ''}`});
+  document.getElementById('logNote').value = '';
+  renderActivity();
+});
+
+function renderStaffDashboard(){
+  renderStaffTasks();
+  renderStaffZones();
+  renderActivity();
+}
+
+/* ============================================================
+   LIVE BACKEND CONNECTION
+   Falls back to the sample data above if the backend isn't running,
+   so this file still works standalone for offline demos.
+============================================================ */
+function fmtINR(n){ return '₹' + Math.round(n).toLocaleString('en-IN'); }
+
+async function renderReportsSummary(){
+  try{
+    const res = await fetch(`${API_BASE}/reports/summary`);
+    const s = await res.json();
+    document.getElementById('kpiTotalPlants').textContent = s.totalPlants.toLocaleString('en-IN');
+    document.getElementById('kpiSurvivalRate').textContent = s.survivalRate + '%';
+    document.getElementById('kpiDispatch').textContent = s.readyToDispatch.toLocaleString('en-IN');
+    document.getElementById('kpiInventoryValue').textContent = fmtINR(s.estimatedInventoryValue);
+  }catch(e){ /* keep static sample KPIs */ }
+}
+
+async function loadLiveData(){
+  const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+  if(!res.ok) throw new Error('backend not reachable');
+
+  const [liveZones, liveBatches, liveAlerts, schedule, liveTasks] = await Promise.all([
+    fetch(`${API_BASE}/zones`).then(r=>r.json()),
+    fetch(`${API_BASE}/batches`).then(r=>r.json()),
+    fetch(`${API_BASE}/alerts`).then(r=>r.json()),
+    fetch(`${API_BASE}/irrigation/schedule`).then(r=>r.json()),
+    fetch(`${API_BASE}/tasks`).then(r=>r.json()),
+  ]);
+
+  zones = liveZones;
+  batches = liveBatches;
+  alertsData = liveAlerts.map(a => ({...a, meta: null})); // let alertRowHTML compute "time ago"
+  staffTasks = liveTasks;
+
+  renderGauges();
+  renderZoneCards();
+  renderAlerts();
+  renderBatches(batches);
+  renderIrrigation();
+  renderSchedule(schedule);
+  renderReportsSummary();
+  renderStaffTasks();
+  renderAdminTasks();
+
+  document.getElementById('liveStatus').style.display = 'inline-flex';
+}
+
+function connectLiveSocket(){
+  if(typeof io === 'undefined') return;
+  const socket = io(); // same-origin
+
+  socket.on('connect', ()=>{ document.getElementById('liveStatus').style.display = 'inline-flex'; });
+  socket.on('disconnect', ()=>{ document.getElementById('liveStatus').style.display = 'none'; });
+
+  socket.on('zones-update', (updatedZones)=>{
+    zones = updatedZones;
+    renderGauges();
+    renderZoneCards();
+    renderIrrigation();
+    renderReportsSummary();
+  });
+
+  socket.on('alert-new', (alert)=>{
+    alertsData.unshift({...alert, meta: null});
+    renderAlerts();
+  });
+}
+
+loadLiveData()
+  .then(connectLiveSocket)
+  .catch(()=>{
+    console.info('Backend not reachable — running with built-in sample data.');
+    document.getElementById('liveStatus').style.display = 'none';
+  });
+
+/* ============================================================
+   CLOCK
+============================================================ */
+function tick(){
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', {
+    weekday:'short', hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+}
+tick(); setInterval(tick, 1000);
+
+/* ============================================================
+   CHARTS
+============================================================ */
+const chartFont = { family: "'Inter', sans-serif", size: 11 };
+Chart.defaults.color = '#4B5A4F';
+Chart.defaults.font = chartFont;
+
+new Chart(document.getElementById('zoneTrendChart'), {
+  type:'line',
+  data:{
+    labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    datasets: zones.map(z=>({
+      label:z.name.split('—')[0].trim(),
+      data:[z.soil+8,z.soil+5,z.soil+3,z.soil+1,z.soil-1,z.soil-3,z.soil],
+      borderColor:ringColor(z.status),
+      backgroundColor:'transparent',
+      tension:.35,
+      pointRadius:0,
+      borderWidth:2.2,
+    }))
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom', labels:{boxWidth:8, boxHeight:8, usePointStyle:true}}},
+    scales:{ y:{ grid:{color:'#E4EBD9'}, ticks:{callback:v=>v+'%'} }, x:{ grid:{display:false} } }
+  }
+});
+
+new Chart(document.getElementById('waterChart'), {
+  type:'bar',
+  data:{
+    labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    datasets:[{
+      label:'Liters used',
+      data:[1420,1310,1180,1260,1090,980,1240],
+      backgroundColor:'#336B48',
+      borderRadius:5,
+      maxBarThickness:26,
+    }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{ y:{ grid:{color:'#E4EBD9'} }, x:{ grid:{display:false} } }
+  }
+});
+
+new Chart(document.getElementById('reportsChart'), {
+  type:'line',
+  data:{
+    labels:['Mar','Apr','May','Jun','Jul','Aug'],
+    datasets:[
+      {label:'Total plants', data:[1680,1820,1990,2100,2240,2340], borderColor:'#1F3D2B', backgroundColor:'rgba(31,61,43,0.08)', fill:true, tension:.35, pointRadius:0, borderWidth:2.4},
+      {label:'Survival rate %', data:[91,90.5,92,93,93.8,94.2], borderColor:'#E3A13E', backgroundColor:'transparent', tension:.35, pointRadius:0, borderWidth:2.2, yAxisID:'y1'},
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom', labels:{boxWidth:8, boxHeight:8, usePointStyle:true}}},
+    scales:{
+      y:{ grid:{color:'#E4EBD9'}, position:'left' },
+      y1:{ grid:{display:false}, position:'right', min:85, max:100, ticks:{callback:v=>v+'%'} },
+      x:{ grid:{display:false} }
+    }
+  }
+});
+</script>
+</body>
+</html>
